@@ -18,16 +18,16 @@ type Server struct {
 
 type Telegram struct {
 	Token   string `yaml:"telegramToken"`
-	AdminId int64  `yaml:"adminId"`
+	AdminID int64  `yaml:"adminId"`
 }
 
 type Service struct {
-	ServiceId string `yaml:"serviceId"`
-	UserId    int64  `yaml:"userId"`
+	ServiceID string `yaml:"serviceId"`
+	UserID    int64  `yaml:"userId"`
 }
 
 type Health struct {
-	Url string `yaml:"url"`
+	URL string `yaml:"url"`
 }
 
 func NewConfig() *Config {

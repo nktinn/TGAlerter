@@ -15,72 +15,62 @@ import (
 )
 
 func main() {
-	//Create log file
+	// Create log file
 	file, fileErr := createLogFile()
 
-	//zerolog logger
+	// Start logger
 	var logger zerolog.Logger
 	if fileErr != nil {
 		logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
-		logger.Info().Msgf("[" + time.Now().Format("20060102150405") + "] " + "Program started")
-		logger.Error().Msgf("["+time.Now().Format("20060102150405")+"] "+"Error while creating log file: %s", fileErr.Error())
+		logger.Info().Msgf("[%s] Program started", time.Now().Format("20060102150405"))
+		logger.Error().Msgf("[%s] Error while creating log file: %s", time.Now().Format("20060102150405"), fileErr.Error())
 	} else {
 		multi := zerolog.MultiLevelWriter(zerolog.ConsoleWriter{Out: os.Stdout}, file)
 		logger = zerolog.New(multi).With().Timestamp().Logger()
-		logger.Info().Msgf("[" + time.Now().Format("20060102150405") + "] " + "Program started")
-		logger.Info().Msgf("[" + time.Now().Format("20060102150405") + "] " + "Log file created successfully")
+		logger.Info().Msgf("[%s] Program started", time.Now().Format("20060102150405"))
+		logger.Info().Msgf("[%s] Log file created successfully", time.Now().Format("20060102150405"))
 	}
 
-	//cfg
+	// Config
 	cfg := configs.NewConfig()
-	logger.Info().Msgf("[" + time.Now().Format("20060102150405") + "] " + "Config read")
+	logger.Info().Msgf("[%s] Config read", time.Now().Format("20060102150405"))
 
-	//telebot
+	// Start telebot
 	telegramBot, telegramErr := telebot.NewBot(telebot.Settings{
 		Token:  cfg.Telegram.Token,
 		Poller: &telebot.LongPoller{Timeout: 10 * 60 * 1000},
 	})
 	if telegramErr != nil {
-		logger.Error().Msgf("["+time.Now().Format("20060102150405")+"] "+"Error while connecting telebot: %s", telegramErr.Error())
+		logger.Error().Msgf("[%s] Error while connecting telebot: %s", time.Now().Format("20060102150405"), telegramErr.Error())
 		return
 	}
-	logger.Info().Msgf("[" + time.Now().Format("20060102150405") + "] " + "Telebot connection successfull")
+	logger.Info().Msgf("[%s] Telebot connection successful", time.Now().Format("20060102150405"))
 
 	repos := repository.NewRepository()
-	services := service.NewService(repos, telegramBot, cfg.Telegram, cfg.Service, logger)
-	handlers := handler.NewHandler(services, logger)
+	services := service.NewService(repos, telegramBot, cfg.Telegram, cfg.Service, &logger)
+	handlers := handler.NewHandler(services, &logger)
 
 	srv := new(server.Server)
-	app := handlers.InitPostRoutes()
-
-	//Run listener
+	// Run listener
 	go func() {
-		if err := srv.RunFiber(cfg.Server, app); err != nil {
-			logger.Error().Msgf("["+time.Now().Format("20060102150405")+"] "+"Error while running listener: %s", err.Error())
+		if err := srv.RunFiber(cfg.Server, handlers.InitPostRoutes()); err != nil {
+			logger.Error().Msgf("[%s] Error while running listener: %s", time.Now().Format("20060102150405"), err.Error())
 			return
 		}
 	}()
 
-	//Run healthCheckers
-	restyClient := srv.RunResty()
-	for _, url := range cfg.Health {
-		go func(u string) {
-			ticker := time.NewTicker(10 * time.Minute)
-			defer ticker.Stop()
-			for {
-				if err := services.Alerter.HealthCheck(restyClient, u); err != nil {
-					logger.Error().Msgf("["+time.Now().Format("20060102150405")+"] "+"Error while health checking \"%s\": %s", u, err.Error())
-				}
-				<-ticker.C
-			}
-		}(url.Url)
-	}
+	// Run healthCheckers
+	go services.Alerter.HealthCheckWorker(cfg.Health)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
 	<-quit
 
-	logger.Info().Msgf("[" + time.Now().Format("20060102150405") + "] " + "Program stopped")
+	if err := srv.Shutdown(); err != nil {
+		logger.Info().Msgf("[%s] Program stopped with error while shutting down server", time.Now().Format("20060102150405"))
+	} else {
+		logger.Info().Msgf("[%s] Program stopped", time.Now().Format("20060102150405"))
+	}
 }
 
 func createLogFile() (*os.File, error) {
