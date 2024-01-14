@@ -1,9 +1,11 @@
 package handler
 
 import (
-	"github.com/gofiber/fiber/v2"
-	"github.com/nktinn/TGAlerter/internal/model"
 	"time"
+
+	"github.com/gofiber/fiber/v2"
+
+	"github.com/nktinn/TGAlerter/internal/model"
 )
 
 func (h *Handler) getAlert(c *fiber.Ctx) error {

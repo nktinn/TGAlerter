@@ -1,12 +1,23 @@
 package repository
 
-type Alerter interface {
+import (
+	"github.com/jmoiron/sqlx"
+)
+
+const (
+	routes = "notification_routes"
+)
+
+type RouteService interface {
+	GetRoute(service string) int64
 }
 
 type Repository struct {
-	Alerter
+	RouteService
 }
 
-func NewRepository() *Repository {
-	return &Repository{}
+func NewRepository(db *sqlx.DB) *Repository {
+	return &Repository{
+		RouteService: NewRouter(db),
+	}
 }
