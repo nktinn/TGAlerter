@@ -1,17 +1,19 @@
 package main
 
 import (
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/rs/zerolog"
+	"gopkg.in/telebot.v3"
+
 	"github.com/nktinn/TGAlerter/configs"
 	"github.com/nktinn/TGAlerter/internal/handler"
 	"github.com/nktinn/TGAlerter/internal/repository"
 	"github.com/nktinn/TGAlerter/internal/server"
 	"github.com/nktinn/TGAlerter/internal/service"
-	"github.com/rs/zerolog"
-	"gopkg.in/telebot.v3"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 func main() {
@@ -35,6 +37,14 @@ func main() {
 	cfg := configs.NewConfig()
 	logger.Info().Msgf("[%s] Config read", time.Now().Format("20060102150405"))
 
+	// Database
+	db, dbErr := repository.NewPostgresDB(cfg.Database)
+	if dbErr != nil {
+		logger.Error().Msgf("[%s] Error while connecting to database: %s", time.Now().Format("20060102150405"), dbErr.Error())
+		return
+	}
+	logger.Info().Msgf("[%s] Database connection successful", time.Now().Format("20060102150405"))
+
 	// Start telebot
 	telegramBot, telegramErr := telebot.NewBot(telebot.Settings{
 		Token:  cfg.Telegram.Token,
@@ -46,8 +56,8 @@ func main() {
 	}
 	logger.Info().Msgf("[%s] Telebot connection successful", time.Now().Format("20060102150405"))
 
-	repos := repository.NewRepository()
-	services := service.NewService(repos, telegramBot, cfg.Telegram, cfg.Service, &logger)
+	repo := repository.NewRepository(db)
+	services := service.NewService(repo, telegramBot, cfg.Telegram, cfg.Service, &logger)
 	handlers := handler.NewHandler(services, &logger)
 
 	srv := new(server.Server)

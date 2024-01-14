@@ -2,14 +2,16 @@ package service
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/go-resty/resty/v2"
 	"github.com/gofiber/fiber/v2"
+	"github.com/rs/zerolog"
+	"gopkg.in/telebot.v3"
+
 	"github.com/nktinn/TGAlerter/configs"
 	"github.com/nktinn/TGAlerter/internal/model"
 	"github.com/nktinn/TGAlerter/internal/repository"
-	"github.com/rs/zerolog"
-	"gopkg.in/telebot.v3"
-	"time"
 )
 
 type Alert struct {
@@ -33,6 +35,10 @@ func NewAlert(repo *repository.Repository, telegramBot *telebot.Bot, telegramCfg
 	}
 }
 
+func (a *Alert) GetRoute(service string) int64 {
+	return a.repo.GetRoute(service)
+}
+
 func (a *Alert) SendAlert(alert model.Alert) error {
 	var msg string
 	switch alert.AlertType {
@@ -46,16 +52,15 @@ func (a *Alert) SendAlert(alert model.Alert) error {
 		msg = fmt.Sprintf("[nothing]\n%s\n%s", alert.ServiceID, alert.Message)
 	}
 
-	for _, service := range a.serviceCfg {
-		if service.ServiceID == alert.ServiceID {
-			_, err := a.telegramBot.Send(&telebot.Chat{ID: service.UserID}, msg)
-			if err != nil {
-				a.logger.Error().Msgf("[%s] Error while sending alert: %s -- %s -- %s",
-					time.Now().Format("20060102150405"), err.Error(), alert.ServiceID, alert.Message)
-				return err
-			}
-			return nil
+	userID := a.GetRoute(alert.ServiceID)
+	if userID != 0 {
+		_, err := a.telegramBot.Send(&telebot.Chat{ID: userID}, msg)
+		if err != nil {
+			a.logger.Error().Msgf("[%s] Error while sending alert: %s -- %s -- %s",
+				time.Now().Format("20060102150405"), err.Error(), alert.ServiceID, alert.Message)
+			return err
 		}
+		return nil
 	}
 	_, err := a.telegramBot.Send(&telebot.Chat{ID: a.telegramCfg.AdminID}, msg)
 	if err != nil {

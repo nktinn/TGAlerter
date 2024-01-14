@@ -2,6 +2,7 @@ package server
 
 import (
 	"github.com/gofiber/fiber/v2"
+
 	"github.com/nktinn/TGAlerter/configs"
 )
 

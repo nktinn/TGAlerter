@@ -2,8 +2,9 @@ package handler
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/nktinn/TGAlerter/internal/service"
 	"github.com/rs/zerolog"
+
+	"github.com/nktinn/TGAlerter/internal/service"
 )
 
 type Handler struct {

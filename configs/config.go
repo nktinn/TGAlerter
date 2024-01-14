@@ -1,8 +1,9 @@
 package configs
 
 import (
-	"gopkg.in/yaml.v3"
 	"os"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
@@ -10,6 +11,7 @@ type Config struct {
 	Telegram Telegram  `yaml:"telegram"`
 	Service  []Service `yaml:"service"`
 	Health   []Health  `yaml:"healthCheck"`
+	Database Database  `yaml:"postgres"`
 }
 
 type Server struct {
@@ -28,6 +30,15 @@ type Service struct {
 
 type Health struct {
 	URL string `yaml:"url"`
+}
+
+type Database struct {
+	Host     string `yaml:"host"`
+	Port     string `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	DBName   string `yaml:"dbName"`
+	SSLMode  string `yaml:"sslMode"`
 }
 
 func NewConfig() *Config {
