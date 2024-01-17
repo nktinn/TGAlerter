@@ -14,11 +14,11 @@ func NewRouter(db *sqlx.DB) *Router {
 	return &Router{db: db}
 }
 
-func (r *Router) GetRoute(service string) int64 {
+func (r *Router) GetRoute(serviceID string) int64 {
 	var userID int64
 
 	query := fmt.Sprintf("SELECT userID FROM %s WHERE serviceID = $1", routes)
-	row := r.db.QueryRow(query, service)
+	row := r.db.QueryRow(query, serviceID)
 	if err := row.Scan(&userID); err != nil {
 		return 0
 	}
