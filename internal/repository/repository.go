@@ -9,7 +9,7 @@ const (
 )
 
 type RouteService interface {
-	GetRoute(service string) int64
+	GetRoute(serviceID string) int64
 }
 
 type Repository struct {

@@ -1,11 +1,13 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/gofiber/fiber/v2"
+	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 	"gopkg.in/telebot.v3"
 
@@ -35,26 +37,34 @@ func NewAlert(repo *repository.Repository, telegramBot *telebot.Bot, telegramCfg
 	}
 }
 
-func (a *Alert) GetRoute(service string) int64 {
-	return a.repo.GetRoute(service)
+func (a *Alert) GetRoute(serviceID string) int64 {
+	return a.repo.GetRoute(serviceID)
 }
 
-func (a *Alert) SendAlert(alert model.Alert) error {
-	var msg string
-	switch alert.AlertType {
-	case 1:
-		msg = fmt.Sprintf("[EASY ERROR]\n%s\n%s", alert.ServiceID, alert.Message)
-	case 2:
-		msg = fmt.Sprintf("[MEDIUM ERROR]\n%s\n%s", alert.ServiceID, alert.Message)
-	case 3:
-		msg = fmt.Sprintf("[HARD ERROR]\n%s\n%s", alert.ServiceID, alert.Message)
-	default:
-		msg = fmt.Sprintf("[nothing]\n%s\n%s", alert.ServiceID, alert.Message)
+func (a *Alert) SendAlert(msgPost *nats.Msg) error {
+	var msgToSend string
+
+	var alert model.Alert
+	if err := json.Unmarshal(msgPost.Data, &alert); err != nil {
+		a.logger.Error().Msgf("[%s] Error while parsing json body: %s", time.Now().Format("20060102150405"), err.Error())
+		return err
 	}
 
-	userID := a.GetRoute(alert.ServiceID)
+	switch alert.AlertType {
+	case 1:
+		msgToSend = fmt.Sprintf("[EASY ERROR]\n%s\n%s", alert.ServiceID, alert.Message)
+	case 2:
+		msgToSend = fmt.Sprintf("[MEDIUM ERROR]\n%s\n%s", alert.ServiceID, alert.Message)
+	case 3:
+		msgToSend = fmt.Sprintf("[HARD ERROR]\n%s\n%s", alert.ServiceID, alert.Message)
+	default:
+		msgToSend = fmt.Sprintf("[nothing]\n%s\n%s", alert.ServiceID, alert.Message)
+	}
+
+	//userID := a.GetRoute(alert.ServiceID)
+	userID := int64(0)
 	if userID != 0 {
-		_, err := a.telegramBot.Send(&telebot.Chat{ID: userID}, msg)
+		_, err := a.telegramBot.Send(&telebot.Chat{ID: userID}, msgToSend)
 		if err != nil {
 			a.logger.Error().Msgf("[%s] Error while sending alert: %s -- %s -- %s",
 				time.Now().Format("20060102150405"), err.Error(), alert.ServiceID, alert.Message)
@@ -62,12 +72,13 @@ func (a *Alert) SendAlert(alert model.Alert) error {
 		}
 		return nil
 	}
-	_, err := a.telegramBot.Send(&telebot.Chat{ID: a.telegramCfg.AdminID}, msg)
+	_, err := a.telegramBot.Send(&telebot.Chat{ID: a.telegramCfg.AdminID}, msgToSend)
 	if err != nil {
 		a.logger.Error().Msgf("[%s] Error while sending alert: %s -- %s -- %s",
 			time.Now().Format("20060102150405"), err.Error(), alert.ServiceID, alert.Message)
 		return err
 	}
+	a.logger.Info().Msgf("[%s] Alert sent", time.Now().Format("20060102150405"))
 	return nil
 }
 

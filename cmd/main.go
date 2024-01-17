@@ -6,6 +6,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 	"gopkg.in/telebot.v3"
 
@@ -33,6 +34,24 @@ func main() {
 		logger.Info().Msgf("[%s] Log file created successfully", time.Now().Format("20060102150405"))
 	}
 
+	// Start NATS connection
+	nc, err := nats.Connect(nats.DefaultURL)
+	if err != nil {
+		logger.Error().Msgf("[%s] Error while connecting NATS: %s", time.Now().Format("20060102150405"), fileErr.Error())
+		return
+	}
+	logger.Info().Msgf("[%s] NATS connection successful", time.Now().Format("20060102150405"))
+
+	// Close NATS connection
+	defer func(nc *nats.Conn) {
+		err := nc.Drain()
+		defer nc.Close()
+		if err != nil {
+			logger.Error().Msgf("[%s] Error while draining NATS: %s", time.Now().Format("20060102150405"), fileErr.Error())
+			return
+		}
+	}(nc)
+
 	// Config
 	cfg := configs.NewConfig()
 	logger.Info().Msgf("[%s] Config read", time.Now().Format("20060102150405"))
@@ -41,11 +60,11 @@ func main() {
 	db, dbErr := repository.NewPostgresDB(cfg.Database)
 	if dbErr != nil {
 		logger.Error().Msgf("[%s] Error while connecting to database: %s", time.Now().Format("20060102150405"), dbErr.Error())
-		return
+		//return
 	}
 	logger.Info().Msgf("[%s] Database connection successful", time.Now().Format("20060102150405"))
 
-	// Start telebot
+	// Start telegram bot
 	telegramBot, telegramErr := telebot.NewBot(telebot.Settings{
 		Token:  cfg.Telegram.Token,
 		Poller: &telebot.LongPoller{Timeout: 10 * 60 * 1000},
@@ -56,9 +75,30 @@ func main() {
 	}
 	logger.Info().Msgf("[%s] Telebot connection successful", time.Now().Format("20060102150405"))
 
+	// Services and handlers
 	repo := repository.NewRepository(db)
 	services := service.NewService(repo, telegramBot, cfg.Telegram, cfg.Service, &logger)
-	handlers := handler.NewHandler(services, &logger)
+	handlers := handler.NewHandler(services, &logger, nc)
+
+	// Subscribe NATS
+	sub, err := nc.Subscribe("alert", func(msg *nats.Msg) {
+		logger.Info().Msgf("[%s] Received a message: %s", time.Now().Format("20060102150405"), string(msg.Data))
+		services.Alerter.SendAlert(msg)
+	})
+	if err != nil {
+		logger.Error().Msgf("[%s] Error while subscribing to NATS: %s", time.Now().Format("20060102150405"), fileErr.Error())
+		return
+	}
+	logger.Info().Msgf("[%s] Subscribed to NATS", time.Now().Format("20060102150405"))
+
+	defer func(sub *nats.Subscription) {
+		err := sub.Unsubscribe()
+		if err != nil {
+			logger.Error().Msgf("[%s] Error while unsubscribing from NATS: %s", time.Now().Format("20060102150405"), fileErr.Error())
+			return
+		}
+		logger.Info().Msgf("[%s] Unsubscribed from NATS", time.Now().Format("20060102150405"))
+	}(sub)
 
 	srv := new(server.Server)
 	// Run listener
